@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Appointments Dashboard</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f3f4f6;
+        margin: 0;
+        padding: 20px;
+    }
+
+    h1 {
+        text-align: center;
+    }
+
+    /* Controls */
+    .controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+        justify-content: center;
+    }
+
+    input, select, button {
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        font-size: 16px;
+    }
+
+    .tile-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 15px;
+    }
+
+    .tile-list {
+        display: block;
+    }
+
+    .appointment-tile {
+        background: white;
+        padding: 18px;
+        border-radius: 14px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-left: 8px solid #777;
+    }
+
+    /* Status colors */
+    .pending { border-left-color: #f6c23e; }
+    .confirmed { border-left-color: #1cc88a; }
+    .cancelled { border-left-color: #e74a3b; }
+
+    .label {
+        font-weight: bold;
+        color: #444;
+    }
+
+    /* List view */
+    .list-view .appointment-tile {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .pagination {
+        margin-top: 20px;
+        text-align: center;
+    }
+    .pagination button {
+        margin: 5px;
+        padding: 10px 15px;
+    }
+</style>
+</head>
+
+<body>
+
+<h1>Appointments Dashboard</h1>
+
+<!-- Controls -->
+<div class="controls">
+    <input type="text" id="searchInput" placeholder="Search name, phone, vehicle...">
+    <input type="date" id="dateFilter">
+    <select id="vehicleFilter">
+        <option value="">All Vehicles</option>
+    </select>
+    <select id="sortSelect">
+        <option value="dateAsc">Sort: Date ↑</option>
+        <option value="dateDesc">Sort: Date ↓</option>
+        <option value="nameAsc">Name A-Z</option>
+        <option value="nameDesc">Name Z-A</option>
+    </select>
+    <button id="toggleView">Toggle List / Grid</button>
+</div>
+
+<!-- Tile Container -->
+<div id="appointmentsContainer" class="tile-grid"></div>
+
+<!-- Pagination -->
+<div class="pagination">
+    <button id="prevPage">Prev</button>
+    <span id="pageInfo"></span>
+    <button id="nextPage">Next</button>
+</div>
+
+<script>
+const API_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL_HERE";
+
+// Data + pagination
+let allAppointments = [];
+let filtered = [];
+let currentPage = 1;
+const itemsPerPage = 6;
+let listView = false;
+
+async function loadAppointments() {
+    const res = await fetch(`${API_URL}?action=getAppointments`);
+    const data = await res.json();
+    allAppointments = data;
+    applyFilters();
+    populateVehicleDropdown();
+}
+
+function populateVehicleDropdown() {
+    const select = document.getElementById("vehicleFilter");
+    const vehicles = [...new Set(allAppointments.map(a => a.Vehicle))];
+    vehicles.forEach(v => {
+        if (v.trim() !== "") {
+            let opt = document.createElement("option");
+            opt.value = v;
+            opt.innerText = v;
+            select.appendChild(opt);
+        }
+    });
+}
+
+function applyFilters() {
+    const search = document.getElementById("searchInput").value.toLowerCase();
+    const date = document.getElementById("dateFilter").value;
+    const vehicle = document.getElementById("vehicleFilter").value;
+    const sort = document.getElementById("sortSelect").value;
+
+    filtered = allAppointments.filter(a => {
+        const matchesSearch =
+            a.Name.toLowerCase().includes(search) ||
+            a.Phone.toLowerCase().includes(search) ||
+            a.Vehicle.toLowerCase().includes(search);
+
+        const matchesDate = date === "" || a.Date === date;
+        const matchesVehicle = vehicle === "" || a.Vehicle === vehicle;
+
+        return matchesSearch && matchesDate && matchesVehicle;
+    });
+
+    // Sorting
+    filtered.sort((a, b) => {
+        if (sort === "dateAsc") return new Date(a.Date) - new Date(b.Date);
+        if (sort === "dateDesc") return new Date(b.Date) - new Date(a.Date);
+        if (sort === "nameAsc") return a.Name.localeCompare(b.Name);
+        if (sort === "nameDesc") return b.Name.localeCompare(a.Name);
+    });
+
+    currentPage = 1;
+    render();
+}
+
+function render() {
+    const container = document.getElementById("appointmentsContainer");
+    container.className = listView ? "tile-list list-view" : "tile-grid";
+
+    container.innerHTML = "";
+
+    // Pagination
+    const start = (currentPage - 1) * itemsPerPage;
+    const pageItems = filtered.slice(start, start + itemsPerPage);
+
+    pageItems.forEach(a => {
+        const statusClass =
+            a.Status.toLowerCase() === "pending" ? "pending" :
+            a.Status.toLowerCase() === "confirmed" ? "confirmed" :
+            "cancelled";
+
+        const tile = `
+            <div class="appointment-tile ${statusClass}">
+                <div><span class="label">Name:</span> ${a.Name}</div>
+                <div><span class="label">Vehicle:</span> ${a.Vehicle}</div>
+                <div><span class="label">Date:</span> ${a.Date}</div>
+                <div><span class="label">Time:</span> ${a.Time}</div>
+                <div><span class="label">Phone:</span> ${a.Phone}</div>
+                <div><span class="label">Status:</span> ${a.Status}</div>
+                <div><span class="label">ID:</span> ${a.ID}</div>
+            </div>
+        `;
+        container.innerHTML += tile;
+    });
+
+    document.getElementById("pageInfo").innerText =
+        `Page ${currentPage} of ${Math.ceil(filtered.length / itemsPerPage)}`;
+}
+
+document.getElementById("searchInput").oninput = applyFilters;
+document.getElementById("dateFilter").onchange = applyFilters;
+document.getElementById("vehicleFilter").onchange = applyFilters;
+document.getElementById("sortSelect").onchange = applyFilters;
+
+document.getElementById("toggleView").onclick = () => {
+    listView = !listView;
+    render();
+};
+
+document.getElementById("prevPage").onclick = () => {
+    if (currentPage > 1) {
+        currentPage--;
+        render();
+    }
+};
+document.getElementById("nextPage").onclick = () => {
+    if (currentPage < filtered.length / itemsPerPage) {
+        currentPage++;
+        render();
+    }
+};
+
+loadAppointments();
+</script>
+
+</body>
+</html>
