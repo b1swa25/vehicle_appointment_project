@@ -1,4 +1,4 @@
-const API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL";
+const API_URL = "https://script.google.com/macros/s/AKfycbzigT6EJmu6TeRfHe2Djm2wRgVu7GlLo36vLupeObVMHc6JF2wfzjEE5OhfKcMqg_NfbA/exec";
 
 document.getElementById("apptForm").addEventListener("submit", async (e) => {
     e.preventDefault();
